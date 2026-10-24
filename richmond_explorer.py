@@ -7,7 +7,7 @@
 #
 # Author:   Genie Tang
 # Script:   richmond_explorer.py
-# Version:  v2
+# Version:  v32
 #
 # Version log
 #   v1 (2026-10-24): First version. Exposure, burden, vulnerability and health
@@ -41,7 +41,7 @@ import streamlit as st
 from esda.moran import Moran, Moran_Local
 from libpysal.weights import KNN, Queen, Rook
 
-VERSION = "v2"
+VERSION = "v32"
 INK = "#1f2933"
 INK_SOFT = "#52514e"
 GRID = "#e6e6e2"
@@ -55,15 +55,26 @@ MAPCFG = {
     "displayModeBar": True,
     "displaylogo": False,
     "scrollZoom": True,
-    "modeBarButtonsToRemove": ["select2d", "lasso2d", "toggleSpikelines",
-                               "hoverClosestGeo", "hoverCompareCartesian"],
+    # An explicit list, not a remove-list: only these buttons can appear. Each
+    # acts on the click itself, so nothing on the toolbar looks unresponsive,
+    # and Plotly's "Share chart" button, which uploads the plotted data to an
+    # outside service, cannot come back.
+    "modeBarButtons": [["toImage", "zoomInGeo", "zoomOutGeo", "resetGeo"]],
     "toImageButtonOptions": {"format": "png", "scale": 2,
                              "filename": "richmond_explorer_map"},
 }
-if (os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                "static", "world_110m.json"))
-        and os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                        ".streamlit", "config.toml"))):
+CHARTCFG = {
+    "displayModeBar": True,
+    "displaylogo": False,
+    "scrollZoom": False,
+    "modeBarButtons": [["toImage", "zoomIn2d", "zoomOut2d",
+                        "autoScale2d", "resetScale2d"]],
+    "toImageButtonOptions": {"format": "png", "scale": 2,
+                             "filename": "richmond_explorer_chart"},
+}
+MAP_OUTLINES = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "static", "world_110m.json")
+if os.path.exists(MAP_OUTLINES):
     MAPCFG["topojsonURL"] = "app/static/"
 
 # ---- Layer catalogue ---------------------------------------------------------
@@ -178,19 +189,27 @@ def lisa(col, kind, k, permutations):
     return out, float(gm.I), float(gm.p_sim), float(gm.EI)
 
 
-def map_with_reset(fig, name, config=None, label="Reset map view"):
+def map_with_reset(fig, name, config=None, label="\u27f2  Reset map view"):
     """Draw a map with a Reset button above it. The button bumps a counter that
     is part of the chart's key, so Streamlit draws a fresh chart and the view
     returns to the county."""
     cnt_key = f"_mapreset_{name}"
     if cnt_key not in st.session_state:
         st.session_state[cnt_key] = 0
-    left, right = st.columns([5, 1])
+    _, right = st.columns([3, 1.6])
     with right:
-        if st.button(label, key=f"btn_{name}", width="stretch"):
+        if st.button(label, key=f"btn_{name}", width="stretch",
+                     help="Zoom back out to the whole county"):
             st.session_state[cnt_key] += 1
+    # Plotly holds on to the zoom and pan a user has set for as long as
+    # uirevision keeps the same value, which is what made the Reset button
+    # appear to do nothing. Changing it discards that state and falls back to
+    # the ranges set on the layout.
+    fig.update_layout(uirevision=f"{name}-{st.session_state[cnt_key]}")
     st.plotly_chart(fig, width="stretch", config=config or MAPCFG,
                     key=f"{name}_{st.session_state[cnt_key]}")
+    st.caption("Scroll or drag to zoom and pan. Press Reset map view above to "
+               "return to the whole county.")
 
 
 def fmt(v, d):
@@ -285,12 +304,34 @@ def legend_html(items):
 st.set_page_config(page_title="Richmond Spatial Decision Intelligence Explorer",
                    page_icon="🗺️", layout="wide")
 st.markdown("""<style>
+/* Century Gothic where it is installed, Didact Gothic as the free stand-in,
+   the same pair the portfolio site uses. */
+@import url('https://fonts.googleapis.com/css2?family=Didact+Gothic&display=swap');
+html, body, [class*="st-"], .stApp, button, input, select, textarea {
+    font-family: "Century Gothic", CenturyGothic, AppleGothic, "Didact Gothic", sans-serif;
+}
 .block-container {padding-top: 2.2rem;}
-.tile {border:1px solid #e6e6e2;border-radius:12px;padding:12px 16px;background:#fff;height:100%;}
-.tile .name {font-size:0.85rem;color:#52514e;}
-.tile .big {font-size:1.6rem;font-weight:600;color:#1f2933;line-height:1.15;margin-top:2px;}
-.tile .sub {font-size:0.8rem;color:#52514e;margin-top:4px;}
+/* Cards in the portfolio site's style: a pastel fill, a border a shade deeper,
+   and a 6px edge in the card's own colour. min-height keeps a row level when
+   one caption wraps further than the others. */
+.tile {border:1px solid transparent;border-left-width:6px;border-radius:10px;
+       padding:14px 16px 12px 16px;height:100%;min-height:148px;box-sizing:border-box;}
+.tile .name {font-size:0.9rem;font-weight:600;}
+.tile .big {font-size:1.7rem;font-weight:600;color:#14212B;line-height:1.15;margin-top:3px;}
+.tile .sub {font-size:0.8rem;color:#4B5963;margin-top:6px;line-height:1.35;}
 </style>""", unsafe_allow_html=True)
+
+# Card colours lifted from the portfolio site: fill, border, accent.
+CARD = {
+    "pink":   ("#FBE7E6", "#F0CBC8", "#A33E50"),
+    "teal":   ("#E3F2F3", "#C3E0E2", "#16707E"),
+    "yellow": ("#FFF7D1", "#F7E08A", "#8C6D00"),
+    "purple": ("#F1EBF8", "#DACDEC", "#6A4C9C"),
+    "green":  ("#E4F3EA", "#C6E3D1", "#276B43"),
+    "blue":   ("#E6F0FA", "#C9DCF0", "#2F6FB0"),
+    # White, for the card that stays the same whatever is chosen.
+    "fixed":  ("#FFFFFF", "#D9E0DC", "#9FB3CC"),
+}
 
 tracts, geo, rgeo, bounds = load()
 
@@ -340,9 +381,14 @@ cnty = tracts
 tiles = st.columns(5)
 
 
-def tile(col, name, big, sub):
-    col.markdown(f"<div class='tile'><div class='name'>{name}</div><div class='big'>{big}</div>"
-                 f"<div class='sub'>{sub}</div></div>", unsafe_allow_html=True)
+def tile(col, name, big, sub, colour="teal"):
+    fill, edge, accent = CARD[colour]
+    col.markdown(
+        f"<div class='tile' style='background:{fill};border-color:{edge};"
+        f"border-left-color:{accent}'>"
+        f"<div class='name' style='color:{accent}'>{name}</div>"
+        f"<div class='big'>{big}</div>"
+        f"<div class='sub'>{sub}</div></div>", unsafe_allow_html=True)
 
 
 def pop_mean(df, c):
@@ -350,20 +396,39 @@ def pop_mean(df, c):
     return np.average(d[c], weights=d["pop"]) if len(d) else np.nan
 
 
+# The first card is the constant: Richmond's size inside the county. It is
+# white, so it reads as the fixed point. The other four follow the indicator
+# chosen in the sidebar, so the row answers "how does Richmond compare on the
+# thing I am looking at" instead of showing the same five numbers all day.
+r_mean, c_mean = pop_mean(rich, layer), pop_mean(cnty, layer)
+if pd.notna(r_mean) and pd.notna(c_mean) and c_mean:
+    gap = r_mean / c_mean
+    gap_txt = f"{gap:.2f}x the county" if gap >= 1 else f"{gap:.2f}x the county"
+    gap_sub = ("Richmond higher" if gap > 1.02 else
+               "Richmond lower" if gap < 0.98 else "About the same")
+else:
+    gap_txt, gap_sub = "n/a", "No value for this indicator"
+cut = cnty[layer].quantile(0.8)
+top_n = int((rich[layer] >= cut).sum()) if pd.notna(cut) else 0
+
 tile(tiles[0], "Richmond tracts", f"{len(rich)} of {len(cnty)}",
-     f"Population {rich['pop'].sum():,.0f} of {cnty['pop'].sum():,.0f}")
-tile(tiles[1], "PM2.5 days above standard", f"{pop_mean(rich, 'pm25_days'):.2f}",
-     f"County {pop_mean(cnty, 'pm25_days'):.2f} · population-weighted, per year")
-tile(tiles[2], "Adults with asthma", f"{pop_mean(rich, 'asthma_eji'):.1f}%",
-     f"County {pop_mean(cnty, 'asthma_eji'):.1f}% · CDC PLACES")
-tile(tiles[3], "EJI percentile (median tract)", f"{rich['eji_pct'].median():.2f}",
-     f"County {cnty['eji_pct'].median():.2f} · 1 = most burdened")
-tile(tiles[4], "Tracts in top EJI quintile", f"{int((rich['eji_pct'] >= 0.8).sum())} of {len(rich)}",
-     f"County: {int((cnty['eji_pct'] >= 0.8).sum())} of {len(cnty)}")
+     f"Population {rich['pop'].sum():,.0f} of {cnty['pop'].sum():,.0f}"
+     "<br>The same on every view", "fixed")
+tile(tiles[1], f"Richmond: {label}", fmt(r_mean, dec),
+     f"{unit}<br>Population-weighted mean", "pink")
+tile(tiles[2], f"County: {label}", fmt(c_mean, dec),
+     f"{unit}<br>All {len(cnty)} tracts", "teal")
+tile(tiles[3], "Richmond against the county", gap_txt,
+     f"{gap_sub}<br>{label}", "yellow")
+tile(tiles[4], "Richmond tracts in the county top fifth", f"{top_n} of {len(rich)}",
+     f"At or above {fmt(cut, dec)} {unit}<br>{label}", "purple")
+st.caption("The white card stays the same. The four coloured cards follow the "
+           "indicator chosen in the sidebar.")
 st.markdown("")
 
 (tab_map, tab_cluster, tab_biv, tab_priority, tab_table, tab_help, tab_about) = st.tabs(
-    ["Map", "Clusters", "Bivariate map", "Priority tracts", "Table", "How to use", "About the data"])
+    ["Map", "Clusters", "Bivariate Map", "Priority Tracts", "Table",
+     "User Guide", "About the Data"])
 
 # ---- Map tab ------------------------------------------------------------------
 with tab_map:
@@ -397,15 +462,21 @@ with tab_map:
 with tab_cluster:
     clabel, _, cunit, cdec, _ = LAYERS[cluster_layer]
     res, I, pI, EI = lisa(cluster_layer, wkind, k, perms)
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Global Moran's I", f"{I:.2f}",
-              help="Positive: tracts with similar values sit next to each other.")
-    m2.metric("Permutation p-value", "< 0.001" if pI < 0.001 and perms >= 999 else f"{pI:.3f}")
-    m3.metric("Expected I (no pattern)", f"{EI:.3f}")
     counts = res["cluster"].value_counts()
-    m4.metric("High-High tracts", f"{int(counts.get('High-High', 0))}",
-              f"{int(res.loc[tracts['in_richmond'], 'cluster'].eq('High-High').sum())} in Richmond",
-              delta_color="off")
+    hh = int(counts.get("High-High", 0))
+    hh_rich = int(res.loc[tracts["in_richmond"], "cluster"].eq("High-High").sum())
+    p_txt = "< 0.001" if pI < 0.001 and perms >= 999 else f"{pI:.3f}"
+    # The cards name the variable and the weights, so switching either one is
+    # visible even when Moran's I barely moves.
+    m1, m2, m3, m4 = st.columns(4)
+    tile(m1, "Global Moran's I", f"{I:.2f}",
+         f"{clabel}<br>Expected {EI:.3f} under no pattern", "pink")
+    tile(m2, "Permutation p-value", p_txt,
+         f"{perms} permutations<br>{wkind} weights", "teal")
+    tile(m3, "High-High tracts", f"{hh}",
+         f"{hh_rich} of them in Richmond<br>High values beside high values", "yellow")
+    tile(m4, "Significant tracts", f"{int((res['p'] < 0.05).sum())} of {len(res)}",
+         f"p &lt; 0.05<br>{clabel}", "purple")
     lcol, rcol = st.columns([3, 2])
     with lcol:
         hover = res["p"].map(lambda p: f"p = {p:.3f}") + "<br>" + clabel + ": " + \
@@ -441,7 +512,7 @@ with tab_cluster:
                            xaxis=dict(title="Standardised value (z)", gridcolor=GRID, zeroline=False),
                            yaxis=dict(title="Spatial lag of z", gridcolor=GRID, zeroline=False),
                            legend=dict(orientation="h", y=-0.22, font=dict(size=11)))
-        st.plotly_chart(fig2, width="stretch")
+        st.plotly_chart(fig2, width="stretch", config=CHARTCFG)
     st.caption("The map toolbar zooms, pans and resets the view. "
                f"Method: {wkind.lower()} weights" + (f" (k = {k})" if wkind == "k nearest" else "") +
                f", row-standardised; global and local Moran's I from PySAL esda with {perms} "
@@ -551,18 +622,28 @@ with tab_table:
 
 # ---- Help tab --------------------------------------------------------------------
 with tab_help:
+    # Written as paragraphs with the numbers typed in, not as a markdown
+    # ordered list: Streamlit renumbers nested list items, which showed up
+    # as "1.4" and "2.0" instead of 4 and 5.
     st.markdown("""
-1. **Map.** Pick a group and an indicator in the sidebar. Quintile classes match the proposal
-   figures; Continuous shows the raw scale. Hover any tract for its values. The black outline
-   is the City of Richmond.
-2. **Clusters.** Choose the cluster variable and the spatial weights. Global Moran's I says
-   whether similar values sit together; the map shows where (High-High, Low-Low, outliers).
-   Richmond tracts are diamonds in the scatterplot. Raise the permutations for a finer p-value.
-3. **Bivariate map.** Choose an exposure (x) and a burden or outcome (y). The 3 by 3 legend
-   reads up and right; the darkest cells are high on both.
-4. **Priority tracts.** The tracts in the top tercile on both x and y, with a table and a CSV
-   download. Change x and y to test other pairings.
-5. **Table.** Every tract with the main indicators; switch to Richmond only.
+**1. Map.** Pick a group and an indicator in the sidebar. Quintile classes match the proposal
+figures; Continuous shows the raw scale. Hover any tract for its values. The black outline
+is the City of Richmond.
+
+**2. Clusters.** Choose the cluster variable and the spatial weights. Global Moran's I says
+whether similar values sit together; the map shows where (High-High, Low-Low, outliers).
+Richmond tracts are diamonds in the scatterplot. Raise the permutations for a finer p-value.
+
+**3. Bivariate Map.** Choose an exposure (x) and a burden or outcome (y). The 3 by 3 legend
+reads up and right; the darkest cells are high on both.
+
+**4. Priority Tracts.** The tracts in the top tercile on both x and y, with a table and a CSV
+download. Change x and y to test other pairings.
+
+**5. Table.** Every tract with the main indicators; switch to Richmond only.
+
+**Maps.** Every map has a Reset map view button above it that returns the view to the whole
+county, and a toolbar with download, zoom and reset.
 """)
 
 # ---- About tab -------------------------------------------------------------------
