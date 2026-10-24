@@ -7,7 +7,7 @@
 #
 # Author:   Genie Tang
 # Script:   richmond_explorer.py
-# Version:  v36
+# Version:  v37
 #
 # Version log
 #   v1 (2026-10-24): First version. Exposure, burden, vulnerability and health
@@ -41,7 +41,7 @@ import streamlit as st
 from esda.moran import Moran, Moran_Local
 from libpysal.weights import KNN, Queen, Rook
 
-VERSION = "v36"
+VERSION = "v37"
 INK = "#1f2933"
 INK_SOFT = "#52514e"
 GRID = "#e6e6e2"
@@ -337,7 +337,7 @@ tracts, geo, rgeo, bounds = load()
 
 with st.sidebar:
     st.header("Layer")
-    st.caption("Drives the cards above and the **Map** tab.")
+    st.caption("Drives the **Map** tab and its cards.")
     groups = ["Exposure", "Built environment", "Index", "Health", "Social"]
     group = st.radio("Group", groups, horizontal=True, key="group")
     options = [k for k, v in LAYERS.items() if v[1] == group]
@@ -398,40 +398,6 @@ def pop_mean(df, c):
     return np.average(d[c], weights=d["pop"]) if len(d) else np.nan
 
 
-# The indicator is named once, above the row, so the card titles can stay
-# short and the five cards keep the same height. The first card is the
-# constant, Richmond's size inside the county; the other four follow the
-# indicator chosen in the sidebar.
-r_mean, c_mean = pop_mean(rich, layer), pop_mean(cnty, layer)
-if pd.notna(r_mean) and pd.notna(c_mean) and c_mean:
-    ratio = r_mean / c_mean
-    ratio_txt = f"{ratio:.2f}x"
-    ratio_sub = ("Higher" if ratio > 1.02 else
-                 "Lower" if ratio < 0.98 else "About the same")
-else:
-    ratio_txt, ratio_sub = "n/a", "No value"
-cut = cnty[layer].quantile(0.8)
-top_n = int((rich[layer] >= cut).sum()) if pd.notna(cut) else 0
-
-st.markdown(
-    f"<p style='color:{INK_SOFT};font-size:0.95rem;margin:0 0 6px 0'>"
-    f"Showing <b style='color:{INK}'>{label}</b>, {unit}. The green card stays "
-    "the same; the other four follow the indicator chosen in the sidebar.</p>",
-    unsafe_allow_html=True)
-
-tiles = st.columns(5)
-# Every title is one short line and every caption is exactly two lines, so the
-# five cards wrap the same way and keep the same height at any window width.
-tile(tiles[0], "Richmond tracts", f"{len(rich)} of {len(cnty)}",
-     f"Population {rich['pop'].sum():,.0f}<br>Fixed on every view", "green")
-tile(tiles[1], "Richmond", fmt(r_mean, dec),
-     "Population-weighted<br>mean of 23 tracts", "pink")
-tile(tiles[2], "County", fmt(c_mean, dec),
-     f"Population-weighted<br>mean of {len(cnty)} tracts", "teal")
-tile(tiles[3], "Ratio", ratio_txt,
-     f"{ratio_sub}<br>than the county", "yellow")
-tile(tiles[4], "Top fifth", f"{top_n} of {len(rich)}",
-     f"Richmond tracts at<br>or above {fmt(cut, dec)}", "purple")
 st.markdown("")
 
 (tab_map, tab_cluster, tab_biv, tab_priority, tab_table, tab_help, tab_about) = st.tabs(
@@ -442,6 +408,41 @@ st.markdown("")
 with tab_map:
     st.caption("Set by **Layer** in the sidebar: the group, the indicator and "
                "the colour classes.")
+    # The indicator is named once, above the row, so the card titles can stay
+    # short and the five cards keep the same height. The first card is the
+    # constant, Richmond's size inside the county; the other four follow the
+    # indicator chosen in the sidebar.
+    r_mean, c_mean = pop_mean(rich, layer), pop_mean(cnty, layer)
+    if pd.notna(r_mean) and pd.notna(c_mean) and c_mean:
+        ratio = r_mean / c_mean
+        ratio_txt = f"{ratio:.2f}x"
+        ratio_sub = ("Higher" if ratio > 1.02 else
+                     "Lower" if ratio < 0.98 else "About the same")
+    else:
+        ratio_txt, ratio_sub = "n/a", "No value"
+    cut = cnty[layer].quantile(0.8)
+    top_n = int((rich[layer] >= cut).sum()) if pd.notna(cut) else 0
+
+    st.markdown(
+        f"<p style='color:{INK_SOFT};font-size:0.95rem;margin:0 0 6px 0'>"
+        f"Showing <b style='color:{INK}'>{label}</b>, {unit}. The green card stays "
+        "the same; the other four follow the indicator chosen in the sidebar.</p>",
+        unsafe_allow_html=True)
+
+    tiles = st.columns(5)
+    # Every title is one short line and every caption is exactly two lines, so the
+    # five cards wrap the same way and keep the same height at any window width.
+    tile(tiles[0], "Richmond tracts", f"{len(rich)} of {len(cnty)}",
+         f"Population {rich['pop'].sum():,.0f}<br>Fixed on every view", "green")
+    tile(tiles[1], "Richmond", fmt(r_mean, dec),
+         "Population-weighted<br>mean of 23 tracts", "pink")
+    tile(tiles[2], "County", fmt(c_mean, dec),
+         f"Population-weighted<br>mean of {len(cnty)} tracts", "teal")
+    tile(tiles[3], "Ratio", ratio_txt,
+         f"{ratio_sub}<br>than the county", "yellow")
+    tile(tiles[4], "Top fifth", f"{top_n} of {len(rich)}",
+         f"Richmond tracts at<br>or above {fmt(cut, dec)}", "purple")
+    st.markdown("")
     left, right = st.columns([3, 1])
     with left:
         fig = choropleth(tracts, geo, rgeo, layer, label, unit, dec, SCALES[fam], classes,
