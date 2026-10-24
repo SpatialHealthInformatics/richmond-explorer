@@ -7,7 +7,7 @@
 #
 # Author:   Genie Tang
 # Script:   richmond_explorer.py
-# Version:  v37
+# Version:  v38
 #
 # Version log
 #   v1 (2026-10-24): First version. Exposure, burden, vulnerability and health
@@ -41,7 +41,7 @@ import streamlit as st
 from esda.moran import Moran, Moran_Local
 from libpysal.weights import KNN, Queen, Rook
 
-VERSION = "v37"
+VERSION = "v38"
 INK = "#1f2933"
 INK_SOFT = "#52514e"
 GRID = "#e6e6e2"
@@ -445,8 +445,8 @@ with tab_map:
     st.markdown("")
     left, right = st.columns([3, 1])
     with left:
-        fig = choropleth(tracts, geo, rgeo, layer, label, unit, dec, SCALES[fam], classes,
-                         f"{label}, by census tract")
+        st.markdown(f"**{label}** · by census tract")
+        fig = choropleth(tracts, geo, rgeo, layer, label, unit, dec, SCALES[fam], classes, "")
         if not show_richmond:
             fig.data = [t for t in fig.data if not isinstance(t, go.Scattergeo)]
         map_with_reset(fig, "layer")
@@ -454,8 +454,16 @@ with tab_map:
         vals = tracts[layer].astype(float)
         st.markdown(f"**{label}**")
         st.caption(unit)
-        st.metric("Richmond, population-weighted mean", fmt(pop_mean(rich, layer), dec))
-        st.metric("County, population-weighted mean", fmt(pop_mean(cnty, layer), dec))
+        # The Richmond and county means are on the cards above, so this panel
+        # gives what they do not: the spread across the county's tracts.
+        st.markdown(
+            f"<p style='font-size:0.9rem;color:{INK_SOFT};line-height:1.7;margin:0'>"
+            f"Lowest tract <b style='color:{INK}'>{fmt(vals.min(), dec)}</b><br>"
+            f"Median tract <b style='color:{INK}'>{fmt(vals.median(), dec)}</b><br>"
+            f"Highest tract <b style='color:{INK}'>{fmt(vals.max(), dec)}</b><br>"
+            f"Tracts with no value <b style='color:{INK}'>{int(vals.isna().sum())}</b>"
+            "</p>", unsafe_allow_html=True)
+        st.markdown("")
         top = tracts.dropna(subset=[layer]).nlargest(5, layer)
         st.markdown("**Highest five tracts**")
         st.dataframe(pd.DataFrame({"Tract": top["name"].str.replace("Tract ", ""),
@@ -559,8 +567,8 @@ with tab_biv:
         tracts[y_layer].map(lambda v: f"{yl.split(' (')[0]}: {fmt(v, yd)}")
     lcol, rcol = st.columns([3, 1])
     with lcol:
-        fig = category_map(tracts, geo, rgeo, cats, colors, order,
-                           f"{yl.split(' (')[0]} and {xl.split(':')[0]}: terciles", hover)
+        st.markdown(f"**{yl.split(' (')[0]} and {xl.split(':')[0]}** · terciles")
+        fig = category_map(tracts, geo, rgeo, cats, colors, order, "", hover)
         map_with_reset(fig, "bivariate")
     with rcol:
         st.markdown("**Legend** (rows: y terciles, columns: x terciles)")
@@ -575,8 +583,9 @@ with tab_biv:
         st.markdown(grid, unsafe_allow_html=True)
         st.caption(f"Up and right: {yl.split(' (')[0]} (y) · {xl.split(':')[0]} (x)")
         hh = tracts[(xt == 2) & (yt == 2)]
-        st.metric("Tracts high on both", f"{len(hh)}",
-                  f"{int(hh['in_richmond'].sum())} in Richmond", delta_color="off")
+        st.markdown("")
+        tile(st, "Tracts high on both", f"{len(hh)}",
+             f"{int(hh['in_richmond'].sum())} in Richmond<br>Top third on x and y", "purple")
     st.caption("The map toolbar zooms, pans and resets the view. Terciles across the 241 "
                "county tracts, as in Figure 12 of the proposal. The "
                "darkest cells are tracts in the top third on both measures.")
@@ -596,9 +605,11 @@ with tab_priority:
         tracts[y_layer].map(lambda v: f"{yl.split(' (')[0]}: {fmt(v, yd)}")
     lcol, rcol = st.columns([3, 2])
     with lcol:
+        st.markdown(f"**{len(pri)} priority tracts** · "
+                    f"{int(pri['in_richmond'].sum())} in Richmond")
         fig = category_map(tracts, geo, rgeo, cats_p, pcol,
                            ["Priority tract", "Richmond, not priority", "Other"],
-                           f"{len(pri)} priority tracts, {int(pri['in_richmond'].sum())} in Richmond", hover)
+                           "", hover)
         map_with_reset(fig, "priority")
     with rcol:
         show = pri.sort_values(y_layer, ascending=False)
