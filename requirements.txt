@@ -1,0 +1,8 @@
+streamlit>=1.50
+pandas>=2.2
+numpy>=1.26
+plotly>=5.24
+geopandas>=1.0
+shapely>=2.0
+libpysal>=4.12
+esda>=2.6
