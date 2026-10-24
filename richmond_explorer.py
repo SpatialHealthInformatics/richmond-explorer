@@ -7,7 +7,7 @@
 #
 # Author:   Genie Tang
 # Script:   richmond_explorer.py
-# Version:  v34
+# Version:  v36
 #
 # Version log
 #   v1 (2026-10-24): First version. Exposure, burden, vulnerability and health
@@ -41,7 +41,7 @@ import streamlit as st
 from esda.moran import Moran, Moran_Local
 from libpysal.weights import KNN, Queen, Rook
 
-VERSION = "v34"
+VERSION = "v36"
 INK = "#1f2933"
 INK_SOFT = "#52514e"
 GRID = "#e6e6e2"
@@ -337,6 +337,7 @@ tracts, geo, rgeo, bounds = load()
 
 with st.sidebar:
     st.header("Layer")
+    st.caption("Drives the cards above and the **Map** tab.")
     groups = ["Exposure", "Built environment", "Index", "Health", "Social"]
     group = st.radio("Group", groups, horizontal=True, key="group")
     options = [k for k, v in LAYERS.items() if v[1] == group]
@@ -347,6 +348,7 @@ with st.sidebar:
     show_richmond = st.toggle("Outline the City of Richmond", value=True, key="outline")
 
     st.header("Spatial statistics")
+    st.caption("Drives the **Clusters** tab. Nothing here changes the Map tab.")
     cluster_layer = st.selectbox("Cluster variable", list(LAYERS),
                                  index=list(LAYERS).index("asthma_eji"),
                                  format_func=lambda k: LAYERS[k][0], key="cluster_layer")
@@ -358,6 +360,7 @@ with st.sidebar:
     perms = st.select_slider("Permutations", [199, 499, 999, 4999], value=999, key="perms")
 
     st.header("Bivariate and priority")
+    st.caption("Drives the **Bivariate Map** and **Priority Tracts** tabs.")
     x_layer = st.selectbox("Exposure (x)", [k for k, v in LAYERS.items() if v[1] in ("Exposure", "Built environment", "Index")],
                            index=0, format_func=lambda k: LAYERS[k][0], key="x_layer")
     y_opts = [k for k, v in LAYERS.items() if v[1] in ("Health", "Social", "Index")]
@@ -437,6 +440,8 @@ st.markdown("")
 
 # ---- Map tab ------------------------------------------------------------------
 with tab_map:
+    st.caption("Set by **Layer** in the sidebar: the group, the indicator and "
+               "the colour classes.")
     left, right = st.columns([3, 1])
     with left:
         fig = choropleth(tracts, geo, rgeo, layer, label, unit, dec, SCALES[fam], classes,
@@ -465,6 +470,8 @@ with tab_map:
 
 # ---- Clusters tab -------------------------------------------------------------
 with tab_cluster:
+    st.caption("Set by **Spatial statistics** in the sidebar: the cluster "
+               "variable, the weights and the number of permutations.")
     clabel, _, cunit, cdec, _ = LAYERS[cluster_layer]
     res, I, pI, EI = lisa(cluster_layer, wkind, k, perms)
     counts = res["cluster"].value_counts()
@@ -473,25 +480,32 @@ with tab_cluster:
     p_txt = "< 0.001" if pI < 0.001 and perms >= 999 else f"{pI:.3f}"
     # The cards name the variable and the weights, so switching either one is
     # visible even when Moran's I barely moves.
+    st.markdown(
+        f"<p style='color:{INK_SOFT};font-size:0.95rem;margin:0 0 6px 0'>"
+        f"Clustering of <b style='color:{INK}'>{clabel}</b>, "
+        f"{wkind.lower()} weights, {perms} permutations.</p>",
+        unsafe_allow_html=True)
     m1, m2, m3, m4 = st.columns(4)
     tile(m1, "Global Moran's I", f"{I:.2f}",
-         f"{clabel}<br>Expected {EI:.3f} under no pattern", "pink")
+         f"Expected {EI:.3f}<br>under no pattern", "pink")
     tile(m2, "Permutation p-value", p_txt,
-         f"{perms} permutations<br>{wkind} weights", "teal")
+         f"From {perms}<br>random re-assignments", "teal")
     tile(m3, "High-High tracts", f"{hh}",
-         f"{hh_rich} of them in Richmond<br>High values beside high values", "yellow")
+         f"{hh_rich} of them in Richmond<br>High beside high", "yellow")
     tile(m4, "Significant tracts", f"{int((res['p'] < 0.05).sum())} of {len(res)}",
-         f"p &lt; 0.05<br>{clabel}", "purple")
+         "p below 0.05<br>in the local test", "purple")
     lcol, rcol = st.columns([3, 2])
     with lcol:
         hover = res["p"].map(lambda p: f"p = {p:.3f}") + "<br>" + clabel + ": " + \
             tracts[cluster_layer].map(lambda v: fmt(v, cdec)) + " " + cunit
+        st.markdown(f"**Local Moran's I clusters** · {clabel} · p below 0.05")
         fig = category_map(tracts, geo, rgeo, res["cluster"], CLUSTER_COLORS, CLUSTER_ORDER,
-                           f"Local Moran's I clusters: {clabel} (p < 0.05)", hover)
+                           "", hover)
         map_with_reset(fig, "clusters")
         st.markdown(legend_html([(c, CLUSTER_COLORS[c]) for c in CLUSTER_ORDER]),
                     unsafe_allow_html=True)
     with rcol:
+        st.markdown("**Moran scatterplot** · diamonds are Richmond tracts")
         fig2 = go.Figure()
         for cat in CLUSTER_ORDER:
             sub = res[res["cluster"] == cat]
@@ -512,8 +526,6 @@ with tab_cluster:
         fig2.add_vline(x=0, line_color=GRID)
         fig2.update_layout(height=560, plot_bgcolor="white", paper_bgcolor="white",
                            margin=dict(l=10, r=10, t=40, b=10),
-                           title=dict(text="Moran scatterplot (diamonds: Richmond tracts)",
-                                      font=dict(size=16, color=INK), x=0),
                            xaxis=dict(title="Standardised value (z)", gridcolor=GRID, zeroline=False),
                            yaxis=dict(title="Spatial lag of z", gridcolor=GRID, zeroline=False),
                            legend=dict(orientation="h", y=-0.22, font=dict(size=11)))
