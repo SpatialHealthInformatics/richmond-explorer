@@ -7,7 +7,7 @@
 #
 # Author:   Genie Tang
 # Script:   richmond_explorer.py
-# Version:  v33
+# Version:  v34
 #
 # Version log
 #   v1 (2026-10-24): First version. Exposure, burden, vulnerability and health
@@ -41,7 +41,7 @@ import streamlit as st
 from esda.moran import Moran, Moran_Local
 from libpysal.weights import KNN, Queen, Rook
 
-VERSION = "v33"
+VERSION = "v34"
 INK = "#1f2933"
 INK_SOFT = "#52514e"
 GRID = "#e6e6e2"
@@ -315,7 +315,7 @@ html, body, [class*="st-"], .stApp, button, input, select, textarea {
    and a 6px edge in the card's own colour. min-height keeps a row level when
    one caption wraps further than the others. */
 .tile {border:1px solid transparent;border-left-width:6px;border-radius:10px;
-       padding:14px 16px 12px 16px;height:100%;min-height:132px;box-sizing:border-box;}
+       padding:14px 16px 12px 16px;height:100%;min-height:126px;box-sizing:border-box;}
 .tile .name {font-size:0.9rem;font-weight:600;}
 .tile .big {font-size:1.7rem;font-weight:600;color:#14212B;line-height:1.15;margin-top:3px;}
 .tile .sub {font-size:0.8rem;color:#4B5963;margin-top:6px;line-height:1.35;}
@@ -403,10 +403,10 @@ r_mean, c_mean = pop_mean(rich, layer), pop_mean(cnty, layer)
 if pd.notna(r_mean) and pd.notna(c_mean) and c_mean:
     ratio = r_mean / c_mean
     ratio_txt = f"{ratio:.2f}x"
-    ratio_sub = ("Richmond higher" if ratio > 1.02 else
-                 "Richmond lower" if ratio < 0.98 else "About the same")
+    ratio_sub = ("Higher" if ratio > 1.02 else
+                 "Lower" if ratio < 0.98 else "About the same")
 else:
-    ratio_txt, ratio_sub = "n/a", "No value here"
+    ratio_txt, ratio_sub = "n/a", "No value"
 cut = cnty[layer].quantile(0.8)
 top_n = int((rich[layer] >= cut).sum()) if pd.notna(cut) else 0
 
@@ -417,16 +417,18 @@ st.markdown(
     unsafe_allow_html=True)
 
 tiles = st.columns(5)
+# Every title is one short line and every caption is exactly two lines, so the
+# five cards wrap the same way and keep the same height at any window width.
 tile(tiles[0], "Richmond tracts", f"{len(rich)} of {len(cnty)}",
-     f"Population {rich['pop'].sum():,.0f}<br>The same on every view", "green")
+     f"Population {rich['pop'].sum():,.0f}<br>Fixed on every view", "green")
 tile(tiles[1], "Richmond", fmt(r_mean, dec),
-     "Population-weighted mean<br>of the 23 tracts", "pink")
+     "Population-weighted<br>mean of 23 tracts", "pink")
 tile(tiles[2], "County", fmt(c_mean, dec),
-     f"Population-weighted mean<br>of all {len(cnty)} tracts", "teal")
-tile(tiles[3], "Richmond against county", ratio_txt,
-     f"{ratio_sub}<br>Richmond divided by county", "yellow")
-tile(tiles[4], "In the county top fifth", f"{top_n} of {len(rich)}",
-     f"Richmond tracts at or<br>above {fmt(cut, dec)}", "purple")
+     f"Population-weighted<br>mean of {len(cnty)} tracts", "teal")
+tile(tiles[3], "Ratio", ratio_txt,
+     f"{ratio_sub}<br>than the county", "yellow")
+tile(tiles[4], "Top fifth", f"{top_n} of {len(rich)}",
+     f"Richmond tracts at<br>or above {fmt(cut, dec)}", "purple")
 st.markdown("")
 
 (tab_map, tab_cluster, tab_biv, tab_priority, tab_table, tab_help, tab_about) = st.tabs(
