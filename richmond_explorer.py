@@ -7,7 +7,7 @@
 #
 # Author:   Genie Tang
 # Script:   richmond_explorer.py
-# Version:  v32
+# Version:  v33
 #
 # Version log
 #   v1 (2026-10-24): First version. Exposure, burden, vulnerability and health
@@ -41,7 +41,7 @@ import streamlit as st
 from esda.moran import Moran, Moran_Local
 from libpysal.weights import KNN, Queen, Rook
 
-VERSION = "v32"
+VERSION = "v33"
 INK = "#1f2933"
 INK_SOFT = "#52514e"
 GRID = "#e6e6e2"
@@ -315,7 +315,7 @@ html, body, [class*="st-"], .stApp, button, input, select, textarea {
    and a 6px edge in the card's own colour. min-height keeps a row level when
    one caption wraps further than the others. */
 .tile {border:1px solid transparent;border-left-width:6px;border-radius:10px;
-       padding:14px 16px 12px 16px;height:100%;min-height:148px;box-sizing:border-box;}
+       padding:14px 16px 12px 16px;height:100%;min-height:132px;box-sizing:border-box;}
 .tile .name {font-size:0.9rem;font-weight:600;}
 .tile .big {font-size:1.7rem;font-weight:600;color:#14212B;line-height:1.15;margin-top:3px;}
 .tile .sub {font-size:0.8rem;color:#4B5963;margin-top:6px;line-height:1.35;}
@@ -378,7 +378,6 @@ st.markdown(
 # Headline tiles: Richmond against the county.
 rich = tracts[tracts["in_richmond"]]
 cnty = tracts
-tiles = st.columns(5)
 
 
 def tile(col, name, big, sub, colour="teal"):
@@ -396,34 +395,38 @@ def pop_mean(df, c):
     return np.average(d[c], weights=d["pop"]) if len(d) else np.nan
 
 
-# The first card is the constant: Richmond's size inside the county. It is
-# white, so it reads as the fixed point. The other four follow the indicator
-# chosen in the sidebar, so the row answers "how does Richmond compare on the
-# thing I am looking at" instead of showing the same five numbers all day.
+# The indicator is named once, above the row, so the card titles can stay
+# short and the five cards keep the same height. The first card is the
+# constant, Richmond's size inside the county; the other four follow the
+# indicator chosen in the sidebar.
 r_mean, c_mean = pop_mean(rich, layer), pop_mean(cnty, layer)
 if pd.notna(r_mean) and pd.notna(c_mean) and c_mean:
-    gap = r_mean / c_mean
-    gap_txt = f"{gap:.2f}x the county" if gap >= 1 else f"{gap:.2f}x the county"
-    gap_sub = ("Richmond higher" if gap > 1.02 else
-               "Richmond lower" if gap < 0.98 else "About the same")
+    ratio = r_mean / c_mean
+    ratio_txt = f"{ratio:.2f}x"
+    ratio_sub = ("Richmond higher" if ratio > 1.02 else
+                 "Richmond lower" if ratio < 0.98 else "About the same")
 else:
-    gap_txt, gap_sub = "n/a", "No value for this indicator"
+    ratio_txt, ratio_sub = "n/a", "No value here"
 cut = cnty[layer].quantile(0.8)
 top_n = int((rich[layer] >= cut).sum()) if pd.notna(cut) else 0
 
+st.markdown(
+    f"<p style='color:{INK_SOFT};font-size:0.95rem;margin:0 0 6px 0'>"
+    f"Showing <b style='color:{INK}'>{label}</b>, {unit}. The green card stays "
+    "the same; the other four follow the indicator chosen in the sidebar.</p>",
+    unsafe_allow_html=True)
+
+tiles = st.columns(5)
 tile(tiles[0], "Richmond tracts", f"{len(rich)} of {len(cnty)}",
-     f"Population {rich['pop'].sum():,.0f} of {cnty['pop'].sum():,.0f}"
-     "<br>The same on every view", "fixed")
-tile(tiles[1], f"Richmond: {label}", fmt(r_mean, dec),
-     f"{unit}<br>Population-weighted mean", "pink")
-tile(tiles[2], f"County: {label}", fmt(c_mean, dec),
-     f"{unit}<br>All {len(cnty)} tracts", "teal")
-tile(tiles[3], "Richmond against the county", gap_txt,
-     f"{gap_sub}<br>{label}", "yellow")
-tile(tiles[4], "Richmond tracts in the county top fifth", f"{top_n} of {len(rich)}",
-     f"At or above {fmt(cut, dec)} {unit}<br>{label}", "purple")
-st.caption("The white card stays the same. The four coloured cards follow the "
-           "indicator chosen in the sidebar.")
+     f"Population {rich['pop'].sum():,.0f}<br>The same on every view", "green")
+tile(tiles[1], "Richmond", fmt(r_mean, dec),
+     "Population-weighted mean<br>of the 23 tracts", "pink")
+tile(tiles[2], "County", fmt(c_mean, dec),
+     f"Population-weighted mean<br>of all {len(cnty)} tracts", "teal")
+tile(tiles[3], "Richmond against county", ratio_txt,
+     f"{ratio_sub}<br>Richmond divided by county", "yellow")
+tile(tiles[4], "In the county top fifth", f"{top_n} of {len(rich)}",
+     f"Richmond tracts at or<br>above {fmt(cut, dec)}", "purple")
 st.markdown("")
 
 (tab_map, tab_cluster, tab_biv, tab_priority, tab_table, tab_help, tab_about) = st.tabs(
