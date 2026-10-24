@@ -1,4 +1,4 @@
-# Richmond Spatial Decision Intelligence Explorer (v1)
+# Richmond Spatial Decision Intelligence Explorer (v2)
 
 Genie Tang. A working instance of the Dashboard component of the Spatial Decision Intelligence Framework from the PhD proposal *Health Equity Through Sustainable Urban Development* (University of Cambridge). Case study: Richmond, California, within Contra Costa County, at census-tract resolution.
 
@@ -9,6 +9,8 @@ Genie Tang. A working instance of the Dashboard component of the Spatial Decisio
 - **Bivariate map**: terciles of an exposure (x) against a burden or outcome (y), as in Figure 12.
 - **Priority tracts**: tracts in the top tercile on both x and y, with a table and CSV download (the operation described in Section 06.04).
 - **Table**, **How to use**, **About the data**.
+
+Every map has a toolbar (zoom, pan, reset, download as PNG) and a **Reset map view** button that returns it to the whole county.
 
 ## Run it
 

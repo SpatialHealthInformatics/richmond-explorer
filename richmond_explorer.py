@@ -7,7 +7,7 @@
 #
 # Author:   Genie Tang
 # Script:   richmond_explorer.py
-# Version:  v1
+# Version:  v2
 #
 # Version log
 #   v1 (2026-10-24): First version. Exposure, burden, vulnerability and health
@@ -18,6 +18,10 @@
 #       How to use, About the data. Reproduces Figures 10 to 12 of the
 #       proposal (global Moran's I for asthma = 0.69, queen contiguity, 999
 #       permutations).
+#   v2 (2026-10-24): Map usability. The maps now open on an explicit view of
+#       the county instead of an automatic fit, so the toolbar's reset button
+#       returns there; the toolbar is always visible; and each map has a
+#       Reset map view button.
 #
 # How to run
 #   pip install -r requirements.txt
@@ -37,19 +41,30 @@ import streamlit as st
 from esda.moran import Moran, Moran_Local
 from libpysal.weights import KNN, Queen, Rook
 
-VERSION = "v1"
+VERSION = "v2"
 INK = "#1f2933"
 INK_SOFT = "#52514e"
 GRID = "#e6e6e2"
 RICHMOND_LINE = "#14212b"
 # Plotly loads a world outline file to set up any geographic plot; it is served
 # from the app's own static folder so the maps work without outside scripts.
-MAPCFG = ({"topojsonURL": "app/static/"}
-          if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                         "static", "world_110m.json"))
-          and os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                          ".streamlit", "config.toml"))
-          else {})
+# Map toolbar: always visible, so the reset (home) button is there after a
+# zoom, and the clutter buttons are removed. The topojson line points Plotly
+# at the outline file shipped in static/ when that folder is present.
+MAPCFG = {
+    "displayModeBar": True,
+    "displaylogo": False,
+    "scrollZoom": True,
+    "modeBarButtonsToRemove": ["select2d", "lasso2d", "toggleSpikelines",
+                               "hoverClosestGeo", "hoverCompareCartesian"],
+    "toImageButtonOptions": {"format": "png", "scale": 2,
+                             "filename": "richmond_explorer_map"},
+}
+if (os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "static", "world_110m.json"))
+        and os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                        ".streamlit", "config.toml"))):
+    MAPCFG["topojsonURL"] = "app/static/"
 
 # ---- Layer catalogue ---------------------------------------------------------
 # key: (label, group, unit label, decimals, hover format, colour family)
@@ -118,13 +133,20 @@ def load():
     tracts = tracts.set_index("GEOID", drop=False)
     geo = json.loads(tracts.to_json())
     rgeo = json.loads(richmond.to_json())
-    return tracts, geo, rgeo
+    # Bounding box of the county, with a small margin. The maps use this as an
+    # explicit view instead of letting Plotly fit the bounds, so the reset
+    # button in the map toolbar returns to the county and not to the world.
+    minx, miny, maxx, maxy = tracts.total_bounds
+    padx = (maxx - minx) * 0.04
+    pady = (maxy - miny) * 0.06
+    bounds = {"lon": [minx - padx, maxx + padx], "lat": [miny - pady, maxy + pady]}
+    return tracts, geo, rgeo, bounds
 
 
 @st.cache_resource(show_spinner=False)
 def weights(kind, k):
     """Spatial weights on the full tract set, row-standardised."""
-    tracts, _, _ = load()
+    tracts, _, _, _ = load()
     if kind == "Queen contiguity":
         w = Queen.from_dataframe(tracts, use_index=False)
     elif kind == "Rook contiguity":
@@ -138,7 +160,7 @@ def weights(kind, k):
 
 @st.cache_data(show_spinner="Running Moran's I and LISA...")
 def lisa(col, kind, k, permutations):
-    tracts, _, _ = load()
+    tracts, _, _, _ = load()
     w = weights(kind, k)
     y = tracts[col].astype(float)
     # Fill the one tract with no value (a small group-quarters tract) with the
@@ -154,6 +176,21 @@ def lisa(col, kind, k, permutations):
     out["cluster"] = [labels[q] if p < 0.05 else "Not significant"
                       for q, p in zip(lm.q, lm.p_sim)]
     return out, float(gm.I), float(gm.p_sim), float(gm.EI)
+
+
+def map_with_reset(fig, name, config=None, label="Reset map view"):
+    """Draw a map with a Reset button above it. The button bumps a counter that
+    is part of the chart's key, so Streamlit draws a fresh chart and the view
+    returns to the county."""
+    cnt_key = f"_mapreset_{name}"
+    if cnt_key not in st.session_state:
+        st.session_state[cnt_key] = 0
+    left, right = st.columns([5, 1])
+    with right:
+        if st.button(label, key=f"btn_{name}", width="stretch"):
+            st.session_state[cnt_key] += 1
+    st.plotly_chart(fig, width="stretch", config=config or MAPCFG,
+                    key=f"{name}_{st.session_state[cnt_key]}")
 
 
 def fmt(v, d):
@@ -172,8 +209,10 @@ def base_map(fig, rgeo, show_richmond=True, height=560, title=""):
                     lon=[p[0] for p in ring], lat=[p[1] for p in ring], mode="lines",
                     line=dict(color=RICHMOND_LINE, width=2.2), name="City of Richmond",
                     hoverinfo="skip", showlegend=False))
-    fig.update_geos(fitbounds="locations", visible=False, bgcolor="white",
-                    showframe=False)
+    _, _, _, bnds = load()
+    fig.update_geos(visible=False, bgcolor="white", showframe=False,
+                    projection_type="mercator",
+                    lonaxis=dict(range=bnds["lon"]), lataxis=dict(range=bnds["lat"]))
     fig.update_layout(height=height, margin=dict(l=0, r=0, t=40 if title else 0, b=0),
                       paper_bgcolor="white", font=dict(color=INK),
                       title=dict(text=title, font=dict(size=16, color=INK), x=0) if title else None)
@@ -253,7 +292,7 @@ st.markdown("""<style>
 .tile .sub {font-size:0.8rem;color:#52514e;margin-top:4px;}
 </style>""", unsafe_allow_html=True)
 
-tracts, geo, rgeo = load()
+tracts, geo, rgeo, bounds = load()
 
 with st.sidebar:
     st.header("Layer")
@@ -334,7 +373,7 @@ with tab_map:
                          f"{label}, by census tract")
         if not show_richmond:
             fig.data = [t for t in fig.data if not isinstance(t, go.Scattergeo)]
-        st.plotly_chart(fig, width="stretch", config=MAPCFG)
+        map_with_reset(fig, "layer")
     with right:
         vals = tracts[layer].astype(float)
         st.markdown(f"**{label}**")
@@ -347,7 +386,9 @@ with tab_map:
                                    "Value": top[layer].round(dec),
                                    "Richmond": np.where(top["in_richmond"], "yes", "")}),
                      hide_index=True, width="stretch")
-    st.caption("Source: CDC/ATSDR Environmental Justice Index 2024 (indicators from EPA, "
+    st.caption("Zoom with the scroll wheel, or use the toolbar above the map to zoom, pan "
+               "and reset the view (the last two buttons return it to the full county). "
+               "Source: CDC/ATSDR Environmental Justice Index 2024 (indicators from EPA, "
                "ACS 2018-2022 and CDC PLACES); CDC PLACES 2023 release for the second asthma "
                "layer. Census tract boundaries: 2020 cartographic files. Hover a tract for "
                "its values.")
@@ -371,7 +412,7 @@ with tab_cluster:
             tracts[cluster_layer].map(lambda v: fmt(v, cdec)) + " " + cunit
         fig = category_map(tracts, geo, rgeo, res["cluster"], CLUSTER_COLORS, CLUSTER_ORDER,
                            f"Local Moran's I clusters: {clabel} (p < 0.05)", hover)
-        st.plotly_chart(fig, width="stretch", config=MAPCFG)
+        map_with_reset(fig, "clusters")
         st.markdown(legend_html([(c, CLUSTER_COLORS[c]) for c in CLUSTER_ORDER]),
                     unsafe_allow_html=True)
     with rcol:
@@ -401,7 +442,8 @@ with tab_cluster:
                            yaxis=dict(title="Spatial lag of z", gridcolor=GRID, zeroline=False),
                            legend=dict(orientation="h", y=-0.22, font=dict(size=11)))
         st.plotly_chart(fig2, width="stretch")
-    st.caption(f"Method: {wkind.lower()} weights" + (f" (k = {k})" if wkind == "k nearest" else "") +
+    st.caption("The map toolbar zooms, pans and resets the view. "
+               f"Method: {wkind.lower()} weights" + (f" (k = {k})" if wkind == "k nearest" else "") +
                f", row-standardised; global and local Moran's I from PySAL esda with {perms} "
                "conditional permutations; clusters shown at p < 0.05. High-High: a tract with a "
                "high value surrounded by high-value tracts; Low-Low: the reverse; High-Low and "
@@ -430,7 +472,7 @@ with tab_biv:
     with lcol:
         fig = category_map(tracts, geo, rgeo, cats, colors, order,
                            f"{yl.split(' (')[0]} and {xl.split(':')[0]}: terciles", hover)
-        st.plotly_chart(fig, width="stretch", config=MAPCFG)
+        map_with_reset(fig, "bivariate")
     with rcol:
         st.markdown("**Legend** (rows: y terciles, columns: x terciles)")
         grid = "<table style='border-collapse:collapse;font-size:0.8rem'>"
@@ -446,7 +488,8 @@ with tab_biv:
         hh = tracts[(xt == 2) & (yt == 2)]
         st.metric("Tracts high on both", f"{len(hh)}",
                   f"{int(hh['in_richmond'].sum())} in Richmond", delta_color="off")
-    st.caption("Terciles across the 241 county tracts, as in Figure 12 of the proposal. The "
+    st.caption("The map toolbar zooms, pans and resets the view. Terciles across the 241 "
+               "county tracts, as in Figure 12 of the proposal. The "
                "darkest cells are tracts in the top third on both measures.")
 
 # ---- Priority tracts tab -------------------------------------------------------
@@ -467,7 +510,7 @@ with tab_priority:
         fig = category_map(tracts, geo, rgeo, cats_p, pcol,
                            ["Priority tract", "Richmond, not priority", "Other"],
                            f"{len(pri)} priority tracts, {int(pri['in_richmond'].sum())} in Richmond", hover)
-        st.plotly_chart(fig, width="stretch", config=MAPCFG)
+        map_with_reset(fig, "priority")
     with rcol:
         show = pri.sort_values(y_layer, ascending=False)
         st.dataframe(pd.DataFrame({
