@@ -7,7 +7,7 @@
 #
 # Author:   Genie Tang
 # Script:   richmond_explorer.py
-# Version:  v38
+# Version:  v42
 #
 # Version log
 #   v1 (2026-10-24): First version. Exposure, burden, vulnerability and health
@@ -41,7 +41,7 @@ import streamlit as st
 from esda.moran import Moran, Moran_Local
 from libpysal.weights import KNN, Queen, Rook
 
-VERSION = "v38"
+VERSION = "v42"
 INK = "#1f2933"
 INK_SOFT = "#52514e"
 GRID = "#e6e6e2"
@@ -715,7 +715,6 @@ surveyed. These are patterns to take to a planning decision, not causal estimate
 **Built with** Python, Streamlit, pandas, GeoPandas, Plotly and PySAL. Code:
 `richmond_explorer.py` {VERSION}.
 
-**Author.** Genie Tang, epidemiologist and DrPH student, Johns Hopkins Bloomberg School of
-Public Health; master's in spatial analysis for public health. Portfolio:
-[spatialhealthinformatics.github.io](https://spatialhealthinformatics.github.io).
+Genie Tang · Doctoral research in public health informatics, Johns Hopkins Bloomberg
+School of Public Health · [spatialhealthinformatics.github.io](https://spatialhealthinformatics.github.io)
 """)
