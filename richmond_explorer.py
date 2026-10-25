@@ -7,7 +7,7 @@
 #
 # Author:   Genie Tang
 # Script:   richmond_explorer.py
-# Version:  v50
+# Version:  v51
 #
 # Version log
 #   v1 (2026-10-24): First version. Exposure, burden, vulnerability and health
@@ -41,7 +41,7 @@ import streamlit as st
 from esda.moran import Moran, Moran_Local
 from libpysal.weights import KNN, Queen, Rook
 
-VERSION = "v50"
+VERSION = "v51"
 INK = "#1f2933"
 INK_SOFT = "#52514e"
 GRID = "#e6e6e2"
@@ -310,6 +310,15 @@ st.markdown("""<style>
 html, body, [class*="st-"], .stApp, button, input, select, textarea {
     font-family: "Century Gothic", CenturyGothic, AppleGothic, "Didact Gothic", sans-serif;
 }
+/* Streamlit draws its own icons (the sidebar collapse arrows, the help dot)
+   with a ligature font. The rule above matches those elements too, which turns
+   the ligature into its literal name, such as keyboard_double_arrow_left.
+   Give the icon elements their font back. */
+[data-testid="stIconMaterial"], span[data-testid="stIconMaterial"],
+.material-icons, .material-symbols-rounded, .material-symbols-outlined {
+    font-family: "Material Symbols Rounded", "Material Symbols Outlined",
+                 "Material Icons" !important;
+}
 .block-container {padding-top: 2.2rem;}
 /* Cards in the portfolio site's style: a pastel fill, a border a shade deeper,
    and a 6px edge in the card's own colour. min-height keeps a row level when
@@ -319,6 +328,16 @@ html, body, [class*="st-"], .stApp, button, input, select, textarea {
 .tile .name {font-size:0.9rem;font-weight:600;}
 .tile .big {font-size:1.7rem;font-weight:600;color:#14212B;line-height:1.15;margin-top:3px;}
 .tile .sub {font-size:0.8rem;color:#4B5963;margin-top:6px;line-height:1.35;}
+/* Make every card in a row as tall as the tallest one, so a caption that wraps
+   at a narrow window does not leave the row ragged. Scoped with :has(.tile) so
+   it touches only the card rows, not the control rows or the sidebar. */
+[data-testid="stHorizontalBlock"]:has(.tile) {align-items: stretch;}
+[data-testid="stHorizontalBlock"]:has(.tile) [data-testid="stColumn"] {display:flex;}
+[data-testid="stHorizontalBlock"]:has(.tile) [data-testid="stColumn"] > div,
+[data-testid="stHorizontalBlock"]:has(.tile) [data-testid="stVerticalBlock"],
+[data-testid="stHorizontalBlock"]:has(.tile) [data-testid="stMarkdown"],
+[data-testid="stHorizontalBlock"]:has(.tile) [data-testid="stMarkdownContainer"] {
+    height:100%; width:100%;}
 </style>""", unsafe_allow_html=True)
 
 # Card colours lifted from the portfolio site: fill, border, accent.
@@ -346,24 +365,6 @@ with st.sidebar:
                        help="Quintiles put one fifth of tracts in each class, as in the "
                             "proposal figures. Continuous shows the raw scale.")
     show_richmond = st.toggle("Outline the City of Richmond", value=True, key="outline")
-
-    st.header("Spatial statistics")
-    st.caption("Drives the **Clusters** tab. Nothing here changes the Map tab.")
-    # A variable with the same value in every tract has no spatial pattern to
-    # find: Moran's I is undefined for it. The EJI reports air toxics cancer
-    # risk as one county-wide figure, so it is left out of this list.
-    cluster_options = [c for c in LAYERS
-                       if c in tracts.columns
-                       and tracts[c].astype(float).nunique(dropna=True) > 1]
-    cluster_layer = st.selectbox("Cluster variable", cluster_options,
-                                 index=cluster_options.index("asthma_eji"),
-                                 format_func=lambda k: LAYERS[k][0], key="cluster_layer")
-    wkind = st.radio("Spatial weights", ["Queen contiguity", "Rook contiguity", "k nearest"],
-                     key="wkind", help="Queen: tracts that share a border or a corner. "
-                                       "Rook: a border only. k nearest: by centroid distance.")
-    k = st.slider("k (nearest-neighbour weights only)", 4, 10, 6, key="k",
-                  disabled=wkind != "k nearest")
-    perms = st.select_slider("Permutations", [199, 499, 999, 4999], value=999, key="perms")
 
     st.header("Bivariate and priority")
     st.caption("Drives the **Bivariate Map** and **Priority Tracts** tabs.")
@@ -485,8 +486,34 @@ with tab_map:
 
 # ---- Clusters tab -------------------------------------------------------------
 with tab_cluster:
-    st.caption("Set by **Spatial statistics** in the sidebar: the cluster "
-               "variable, the weights and the number of permutations.")
+    # These controls sit in this tab, not in the sidebar, because they change
+    # only what is on this tab. In the sidebar they looked as though they
+    # applied to the Map tab as well, and changing them there appeared to do
+    # nothing to anyone watching the map.
+    # A variable with the same value in every tract has no spatial pattern to
+    # find: Moran's I is undefined for it. The EJI reports air toxics cancer
+    # risk as one county-wide figure, so it is left out of this list.
+    cluster_options = [c for c in LAYERS
+                       if c in tracts.columns
+                       and tracts[c].astype(float).nunique(dropna=True) > 1]
+    c1, c2, c3, c4 = st.columns([2.2, 1.4, 1.0, 1.2])
+    with c1:
+        cluster_layer = st.selectbox("Cluster variable", cluster_options,
+                                     index=cluster_options.index("asthma_eji"),
+                                     format_func=lambda k: LAYERS[k][0],
+                                     key="cluster_layer")
+    with c2:
+        wkind = st.radio("Spatial weights",
+                         ["Queen contiguity", "Rook contiguity", "k nearest"],
+                         key="wkind", horizontal=False,
+                         help="Queen: tracts that share a border or a corner. "
+                              "Rook: a border only. k nearest: by centroid distance.")
+    with c3:
+        k = st.slider("k (nearest only)", 4, 10, 6, key="k",
+                      disabled=wkind != "k nearest")
+    with c4:
+        perms = st.select_slider("Permutations", [199, 499, 999, 4999],
+                                 value=999, key="perms")
     clabel, _, cunit, cdec, _ = LAYERS[cluster_layer]
     res, I, pI, EI = lisa(cluster_layer, wkind, k, perms)
     counts = res["cluster"].value_counts()
@@ -504,9 +531,9 @@ with tab_cluster:
     tile(m1, "Global Moran's I", f"{I:.2f}",
          f"Expected {EI:.3f}<br>under no pattern", "pink")
     tile(m2, "Permutation p-value", p_txt,
-         f"From {perms}<br>random re-assignments", "teal")
+         f"From {perms}<br>permutations", "teal")
     tile(m3, "High-High tracts", f"{hh}",
-         f"{hh_rich} of them in Richmond<br>High beside high", "yellow")
+         f"{hh_rich} in Richmond<br>High beside high", "yellow")
     tile(m4, "Significant tracts", f"{int((res['p'] < 0.05).sum())} of {len(res)}",
          "p below 0.05<br>in the local test", "purple")
     lcol, rcol = st.columns([3, 2])
