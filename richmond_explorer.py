@@ -349,8 +349,14 @@ with st.sidebar:
 
     st.header("Spatial statistics")
     st.caption("Drives the **Clusters** tab. Nothing here changes the Map tab.")
-    cluster_layer = st.selectbox("Cluster variable", list(LAYERS),
-                                 index=list(LAYERS).index("asthma_eji"),
+    # A variable with the same value in every tract has no spatial pattern to
+    # find: Moran's I is undefined for it. The EJI reports air toxics cancer
+    # risk as one county-wide figure, so it is left out of this list.
+    cluster_options = [c for c in LAYERS
+                       if c in tracts.columns
+                       and tracts[c].astype(float).nunique(dropna=True) > 1]
+    cluster_layer = st.selectbox("Cluster variable", cluster_options,
+                                 index=cluster_options.index("asthma_eji"),
                                  format_func=lambda k: LAYERS[k][0], key="cluster_layer")
     wkind = st.radio("Spatial weights", ["Queen contiguity", "Rook contiguity", "k nearest"],
                      key="wkind", help="Queen: tracts that share a border or a corner. "
