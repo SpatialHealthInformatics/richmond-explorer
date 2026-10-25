@@ -328,16 +328,6 @@ html, body, [class*="st-"], .stApp, button, input, select, textarea {
 .tile .name {font-size:0.9rem;font-weight:600;}
 .tile .big {font-size:1.7rem;font-weight:600;color:#14212B;line-height:1.15;margin-top:3px;}
 .tile .sub {font-size:0.8rem;color:#4B5963;margin-top:6px;line-height:1.35;}
-/* Make every card in a row as tall as the tallest one, so a caption that wraps
-   at a narrow window does not leave the row ragged. Scoped with :has(.tile) so
-   it touches only the card rows, not the control rows or the sidebar. */
-[data-testid="stHorizontalBlock"]:has(.tile) {align-items: stretch;}
-[data-testid="stHorizontalBlock"]:has(.tile) [data-testid="stColumn"] {display:flex;}
-[data-testid="stHorizontalBlock"]:has(.tile) [data-testid="stColumn"] > div,
-[data-testid="stHorizontalBlock"]:has(.tile) [data-testid="stVerticalBlock"],
-[data-testid="stHorizontalBlock"]:has(.tile) [data-testid="stMarkdown"],
-[data-testid="stHorizontalBlock"]:has(.tile) [data-testid="stMarkdownContainer"] {
-    height:100%; width:100%;}
 </style>""", unsafe_allow_html=True)
 
 # Card colours lifted from the portfolio site: fill, border, accent.
